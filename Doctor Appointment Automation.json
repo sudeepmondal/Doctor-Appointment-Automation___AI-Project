@@ -1,0 +1,814 @@
+{
+  "name": "Doctor Appointment Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "includeSpamTrash": false,
+          "q": "",
+          "readStatus": "unread",
+          "sender": ""
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -128,
+        -160
+      ],
+      "id": "d78448ad-18c1-416b-a34d-a057945b0aac",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8WG0xPVOjig9iuc4",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b36c26c0-03eb-4e70-89be-4cc1ea6d017f",
+              "name": "subject",
+              "value": "={{$json.Subject}}",
+              "type": "string"
+            },
+            {
+              "id": "01578ca1-bb14-4cbf-b686-0f9066c2bb38",
+              "name": "from",
+              "value": "={{$json.From}}",
+              "type": "string"
+            },
+            {
+              "id": "8c8d7526-6973-44db-bced-4224e7bf9e5e",
+              "name": "to",
+              "value": "={{$json.To}}",
+              "type": "string"
+            },
+            {
+              "id": "3c19e94d-b55c-470d-a2a6-95aa5c3c6bba",
+              "name": "body",
+              "value": "={{$json.snippet}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        -320
+      ],
+      "id": "3e48b278-64f6-4988-af9c-36d1886f9871",
+      "name": "Edit Fields (Set)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const rawText = $json.output?.[0]?.content?.[0]?.text || '';\n\nlet parsed = {};\n\ntry {\n  parsed = JSON.parse(rawText);\n} catch (error) {\n  throw new Error('OpenAI output is not valid JSON: ' + rawText);\n}\n\n// Fallback: if patient_email is missing, try to extract it from the Set node's \"from\" field\nconst fromText = $('Edit Fields (Set)').item.json.from || '';\nconst emailMatch = fromText.match(/<([^>]+)>/);\nconst fallbackEmail = emailMatch ? emailMatch[1] : fromText;\n\n// Final clean object\nreturn {\n  patient_name: parsed.patient_name || '',\n  patient_email: parsed.patient_email || fallbackEmail || '',\n  patient_phone: parsed.patient_phone || '',\n  requested_date: parsed.requested_date || '',\n  requested_time: parsed.requested_time || '',\n  timezone: parsed.timezone || 'Asia/Dhaka',\n  reason: parsed.reason || '',\n  notes: parsed.notes || '',\n  missing_fields: parsed.missing_fields || [],\n  message_id: $('Edit Fields (Set)').item.json.id || '',\n  thread_id: $('Edit Fields (Set)').item.json.threadId || '',\n  subject: $('Edit Fields (Set)').item.json.subject || '',\n  from: fromText,\n  to: $('Edit Fields (Set)').item.json.to || '',\n  body: $('Edit Fields (Set)').item.json.body || '',\n  status: (parsed.missing_fields && parsed.missing_fields.length > 0) ? 'missing_info' : 'parsed',\n  created_at: new Date().toISOString(),\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -320
+      ],
+      "id": "58740234-d88a-4ace-a519-c7f9cff788f2",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7e0b004b-2151-4d00-a437-4096f2c03098",
+              "leftValue": "={{$json.missing_fields}}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        -64
+      ],
+      "id": "bca5fc43-7c56-4ce8-9cb0-53b0476f84e3",
+      "name": "IF (Missing info?)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "03a3c448-c22d-43c6-97cb-a28a33fe394e",
+              "leftValue": "={{$json.snippet}}",
+              "rightValue": "appointment",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "18d89874-4ebe-44ec-85b6-8a53fe2d1891",
+              "leftValue": "={{$json.snippet}}",
+              "rightValue": "consultation",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "38af18a0-4cdd-4835-bbed-8c154bfd6742",
+              "leftValue": "={{$json.snippet}}",
+              "rightValue": "doctor",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b94a4394-7ec2-4947-a6b5-dca0215c9013",
+              "leftValue": "={{$json.snippet}}",
+              "rightValue": "phone",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "db23877c-c366-41cb-bc8a-2755ef8eafd2",
+              "leftValue": "={{$json.snippet}}",
+              "rightValue": "date",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "b012ca7e-670e-44a4-a480-234665bb8ad0",
+              "leftValue": "={{$json.snippet}}",
+              "rightValue": "time",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        80,
+        -160
+      ],
+      "id": "5be074a2-3fe4-46ed-b45a-90f2bbcd701d",
+      "name": "IF (Appointment mail?)"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1YMWArjLjyM8CqHef0JsDc2cY8N4TxeYwI3NU35j7e9U/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Appointments",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YMWArjLjyM8CqHef0JsDc2cY8N4TxeYwI3NU35j7e9U/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "message_id",
+              "lookupValue": "={{$json.message_id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1104,
+        -208
+      ],
+      "id": "3731ecb2-cfd1-4cea-924f-0e5b4fd40b20",
+      "name": "Google Sheets - Lookup Duplicate",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IsdfqeG4q9k3TPXd",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c468ce2e-9f24-4686-9400-f3621cc12792",
+              "leftValue": "={{$json.message_id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        -208
+      ],
+      "id": "7b1bdbc1-091f-43f1-afa2-48aaf93f2c2b",
+      "name": "IF — Duplicate Found?"
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "sudeepmondaldeep@gmail.com",
+          "mode": "list",
+          "cachedResultName": "sudeepmondaldeep@gmail.com"
+        },
+        "timeMin": "={{ DateTime.fromISO($('Code').item.json.requested_date + 'T' + $('Code').item.json.requested_time, { zone: $('Code').item.json.timezone || 'Asia/Dhaka' }).toISO() }}",
+        "timeMax": "={{ DateTime.fromISO($('Code').item.json.requested_date + 'T' + $('Code').item.json.requested_time, { zone: $('Code').item.json.timezone || 'Asia/Dhaka' }).plus({ minutes: 30 }).toISO() }}",
+        "options": {
+          "outputFormat": "availability",
+          "timezone": {
+            "__rl": true,
+            "value": "={{ $('Code').item.json.timezone || 'Asia/Dhaka' }}",
+            "mode": "id"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        80
+      ],
+      "id": "da49ea8a-ca80-406a-93a5-aabefba16a4e",
+      "name": "Get availability in a calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "Jes5vX2dTV8ittSf",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "aeb9780c-49e2-460e-90f9-87109c1b06d6",
+              "leftValue": "={{$json.available}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        80
+      ],
+      "id": "8fbc03a5-390a-4352-8310-7e03817ccb3f",
+      "name": "IF — Slot Available?"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "sudeepmondaldeep@gmail.com",
+          "mode": "list",
+          "cachedResultName": "sudeepmondaldeep@gmail.com"
+        },
+        "start": "={{ DateTime.fromISO($('Code').item.json.requested_date + 'T' + $('Code').item.json.requested_time, { zone: $('Code').item.json.timezone || 'Asia/Dhaka' }).toISO() }}",
+        "end": "={{ DateTime.fromISO($('Code').item.json.requested_date + 'T' + $('Code').item.json.requested_time, { zone: $('Code').item.json.timezone || 'Asia/Dhaka' }).plus({ minutes: 30 }).toISO() }}",
+        "additionalFields": {
+          "summary": "=Appointment - {{ $('Code').item.json.patient_name }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1808,
+        -80
+      ],
+      "id": "0f593b20-50af-4d0f-a2cf-5b217d1f0dc3",
+      "name": "Google Calendar Event Create",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "Jes5vX2dTV8ittSf",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1YMWArjLjyM8CqHef0JsDc2cY8N4TxeYwI3NU35j7e9U/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Appointments",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YMWArjLjyM8CqHef0JsDc2cY8N4TxeYwI3NU35j7e9U/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Code').item.json.message_id }}",
+            "thread_id": "={{ $('Code').item.json.thread_id }}",
+            "patient_name": "={{ $('Code').item.json.patient_name }}",
+            "patient_email": "={{ $('Code').item.json.patient_email }}",
+            "patient_phone": "={{ $('Code').item.json.patient_phone }}",
+            "requested_date": "={{ $('Code').item.json.requested_date }}",
+            "requested_time": "={{ $('Code').item.json.requested_time }}",
+            "timezone": "={{ $('Code').item.json.timezone }}",
+            "reason": "={{ $('Code').item.json.reason }}",
+            "notes": "={{ $('Code').item.json.notes }}",
+            "status": "confirmed",
+            "calendar_event_id": "={{ $json.id }}",
+            "created_at": "={{ $('Code').item.json.created_at }}",
+            "confirmed_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "patient_name",
+              "displayName": "patient_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "patient_email",
+              "displayName": "patient_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "patient_phone",
+              "displayName": "patient_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "requested_date",
+              "displayName": "requested_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "requested_time",
+              "displayName": "requested_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timezone",
+              "displayName": "timezone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calendar_event_id",
+              "displayName": "calendar_event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2016,
+        -80
+      ],
+      "id": "98afe909-c78e-41c3-abee-e02e751741a6",
+      "name": "Google Sheets Append Row",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IsdfqeG4q9k3TPXd",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Sorry. Required Fill not fill up."
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -336
+      ],
+      "id": "ab5310b9-50f1-45f0-936c-7de5fc75c56d",
+      "name": "Stop"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code').item.json.patient_email }}",
+        "subject": "=Appointment Confirmed - {{ $('Code').item.json.requested_date }} {{ $('Code').item.json.requested_time }}",
+        "emailType": "text",
+        "message": "=Hello {{ $('Code').item.json.patient_name }},\n\nThank you for your appointment request.\n\nYour appointment has been confirmed successfully.\n\nAppointment Details:\nDate: {{ $('Code').item.json.requested_date }}\nTime: {{ $('Code').item.json.requested_time }}\nTimezone: {{ $('Code').item.json.timezone }}\nReason: {{ $('Code').item.json.reason }}\n\nIf you need to reschedule, please reply to this email.\n\nBest regards,\nDoctor's Office",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2224,
+        -80
+      ],
+      "id": "c5175d7c-e82e-4fb7-905c-535b1fbbc263",
+      "name": "Gmail Send Confirmation",
+      "webhookId": "1d656ad3-14e3-493e-a6fe-c00499176e81",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8WG0xPVOjig9iuc4",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Subject: {{$json.Subject}}\nFrom: {{$json.From}}\nTo: {{$json.To}}\nEmail Body: {{$json.snippet}}"
+            },
+            {
+              "role": "system",
+              "content": "You are an appointment data extraction assistant.\n\nThe email may be written in:\n- labeled field format\n- plain paragraph format\n- short informal request format\n\nExtract appointment booking information from the email and return STRICT JSON only.\n\nUse exactly these keys:\npatient_name\npatient_email\npatient_phone\nrequested_date\nrequested_time\ntimezone\nreason\nnotes\nmissing_fields\n\nRules:\n- No markdown\n- No explanation\n- No extra text\n- If a field is missing, return an empty string\n- If timezone is missing, return \"Asia/Dhaka\"\n- requested_date should be YYYY-MM-DD if possible\n- requested_time should be HH:MM in 24-hour format if possible\n- missing_fields must be an array\n- Required fields are: patient_name, patient_phone, requested_date, requested_time\n- Extract the information even if the order is different\n- If the subject is irrelevant, ignore it and rely on the email body"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 300
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        496,
+        -320
+      ],
+      "id": "4611605c-f8aa-481c-a454-9f15523338bd",
+      "name": "OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "Z617LMGx2uUaezdb",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 240,
+        "width": 752,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        240,
+        -368
+      ],
+      "typeVersion": 1,
+      "id": "fc17ed76-cfd3-4884-ae20-f830683b727c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 240,
+        "width": 656,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1760,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "4a0b7258-a486-49b3-9cee-30a0bb8f06ae",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "IF (Appointment mail?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields (Set)": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "IF (Missing info?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF (Appointment mail?)": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields (Set)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF (Missing info?)": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Lookup Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Lookup Duplicate": {
+      "main": [
+        [
+          {
+            "node": "IF — Duplicate Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Duplicate Found?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get availability in a calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get availability in a calendar": {
+      "main": [
+        [
+          {
+            "node": "IF — Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar Event Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar Event Create": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets Append Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Append Row": {
+      "main": [
+        [
+          {
+            "node": "Gmail Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ea174ca6-0769-4f57-87a4-1357ced593ed",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "efe6a6192b4d5ee29d8964bf90bc6eaf3aaa2604e9a4cc2ae17683684d87e7b2"
+  },
+  "id": "GByebslrNUL85QfO",
+  "tags": []
+}
